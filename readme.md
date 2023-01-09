@@ -1,5 +1,5 @@
 # Stable Diffusion Prompt Perchance User Script
-An AUTOMATIC1111/Grafio Stable Diffusion script that inserts output from a [perchance.org](https://perchance.org) generator into the prompt.
+An AUTOMATIC1111/Gradio Stable Diffusion script that inserts output from a [perchance.org](https://perchance.org) generator into the prompt.
 
 Unfortunately, perchance does not have a public API, so a local node.js API server/proxy is included. You will need to install node.js, then go into the ./perchance_proxy folder, run `npm install` and then run `node perchance_proxy`. This will run a small local node server using Node Express, which will open up an endpoint on `http://localhost:7864` that will listen for `GET /generate?name=[perchance_name]` calls, download the named perchance html for reuse, run it, gather the output, then respond with that output. 
 
