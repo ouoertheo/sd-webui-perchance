@@ -79,7 +79,7 @@ class Script(scripts.Script):
             gr.Markdown("You must have Node.js installed to run the Perchance proxy service. Expand Proxy settings and click `Start`. Insert `{perchance}` into prompt text and it will be replaced with perchance output. Enter in name of Perchance generator (last part of URL) Proxy must be running.")
         with gr.Accordion("History",open=True) as history:
             with gr.Row():
-                history_dropdown = gr.Dropdown(get_local_perchance_files(),label="Prompt History",type='value')
+                history_dropdown = gr.Dropdown(get_local_perchance_files(),label="Generator History",type='value')
                 history_submit = gr.Button("Submit")
         generator_name = gr.Textbox(label="Generator Name",elem_id='generator-name')
         output = gr.Textbox(label="Perchance Output",elem_id="perchance-output")
