@@ -12,6 +12,7 @@ const { nextTick } = require("process");
 
 const app = express();
 const port = "7864"
+const path = "./scripts/perchance_proxy/"
 
 async function fetchPerchanceHTML(generatorName, callback){
     html = await fetch(`https://perchance.org/api/downloadGenerator?generatorName=${generatorName}&__cacheBust=${Math.random()}`).then(r => r.text());
@@ -24,7 +25,7 @@ async function fetchPerchanceHTML(generatorName, callback){
 
 async function getPerchanceOutput(generatorName, callback){
     // let generatorName = "animal-sentence";
-    let filename = generatorName+'.html'
+    let filename = path+generatorName+'.html'
     let html
     let outer_err
     let output = ""
