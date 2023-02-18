@@ -31,6 +31,22 @@ def get_local_perchance_files():
                 valid_files.append(file.strip('.html'))
     return valid_files
 
+def update_local_perchance_file(name):
+    delete_local_perchance_file(name)
+    requests.get(perchance_proxy+name).content.decode('utf-8')
+    return (f"Updated {name}",gr.Dropdown.update(choices=get_local_perchance_files()))
+
+def delete_local_perchance_file(name):
+    global perchance_file_path
+    message=""
+    file_path = os.path.join(perchance_file_path,name+'.html')
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        message=f"Removed {file_path}"
+    else:
+        message=f"Could not find {file_path}"
+    return (message,gr.Dropdown.update(choices=get_local_perchance_files()))
+
 def delete_local_perchance_files():
     global perchance_file_path
     html_files = [f for f in os.listdir(perchance_file_path) if f.endswith('.html')]
@@ -77,40 +93,38 @@ class Script(scripts.Script):
     def ui(self, is_img2img):
         with gr.Accordion(label="Instructions",open=False):
             gr.Markdown("You must have Node.js installed to run the Perchance proxy service. Expand Proxy settings and click `Start`. Insert `{perchance}` into prompt text and it will be replaced with perchance output. Enter in name of Perchance generator (last part of URL) Proxy must be running.")
-        with gr.Accordion("History",open=True) as history:
+        with gr.Accordion("Proxy",open=False) as proxy:
             with gr.Row():
-                history_dropdown = gr.Dropdown(get_local_perchance_files(),label="Prompt History",type='value')
-                history_submit = gr.Button("Submit")
+                install_deps = gr.Button("Install Dependencies")
+                proxy_start = gr.Button("Start Proxy")
+        with gr.Accordion("Cache",open=True) as cache:
+            with gr.Row():
+                cache_dropdown = gr.Dropdown(get_local_perchance_files(),label="Prompt History",type='value')
+            with gr.Row():
+                cache_load = gr.Button("Load")
+                cache_update = gr.Button("Update")
+                cache_delete = gr.Button("Delete")
         generator_name = gr.Textbox(label="Generator Name",elem_id='generator-name')
         output = gr.Textbox(label="Perchance Output",elem_id="perchance-output")
         refresh_on_run = gr.Checkbox(label="Refresh on each run")
         sequential = gr.Checkbox(label="Sequential seeds")
         refresh = gr.Button(value="Refresh")
-        with gr.Accordion("Proxy",open=False) as proxy:
-            with gr.Row():
-                install_deps = gr.Button("Install Dependencies")
-                proxy_start = gr.Button("Start Proxy")
-                reset_cache = gr.Button("Reset Cache")
-            proxy_message = gr.Textbox(label="Proxy Status", interactive=False)
-        history_submit.click(None, inputs=[history_dropdown],outputs=[generator_name])
-        refresh.click(get_perchance,inputs=[generator_name],outputs=[output,history_dropdown])
-        proxy_start.click(run_local_perchance_proxy,inputs=[],outputs=[proxy_message])
-        install_deps.click(node_install,inputs=[],outputs=[proxy_message])
-        reset_cache.click(delete_local_perchance_files,inputs=[],outputs=[proxy_message,history_dropdown])
+                
+        status = gr.Textbox(label="Status", interactive=False)
+        cache_load.click(None, inputs=[cache_dropdown],outputs=[generator_name])
+        cache_update.click(update_local_perchance_file,inputs=cache_dropdown,outputs=[status,cache_dropdown])
+        cache_delete.click(delete_local_perchance_file,inputs=cache_dropdown,outputs=[status,cache_dropdown])
+        refresh.click(get_perchance,inputs=[generator_name],outputs=[output,cache_dropdown])
+        proxy_start.click(run_local_perchance_proxy,inputs=[],outputs=[status])
+        install_deps.click(node_install,inputs=[],outputs=[status])
 
         # TODO install_node
-        return [generator_name, output, refresh_on_run, sequential, proxy_message]
+        return [generator_name, output, refresh_on_run, sequential, status]
 
     def run(self, p: StableDiffusionProcessing, generator_name, output, refresh_on_run, sequential, proxy_message: gr.Textbox):
         global perchance_proxy_instance
         original_prompt: str = p.prompt[0] if type(p.prompt) == list else p.prompt
 
-        try:
-            stopped = perchance_proxy_instance.poll()
-            assert not stopped
-        except:
-            raise Exception("Perchance Proxy not running. Ensure node.js is installed and click 'Install Dependencies' then 'Start Proxy'")
-            
         # Randomize prompt if enabled. Currently disregards batch size.
         # Intercepts batch_count and (p_iter) and 
         if refresh_on_run and not p.n_iter == 1:
@@ -126,7 +140,7 @@ class Script(scripts.Script):
                 p.do_not_save_grid = True
 
                 # Do the actual thing this script is supposed to do.
-                p.prompt = original_prompt.replace("{perchance}",get_perchance(generator_name))
+                p.prompt = original_prompt.replace("{perchance}",get_perchance(generator_name)[0])
                 state.job = f"Batch {i + 1}/{batch_count}"
                 processed = process_images(p)
                 
