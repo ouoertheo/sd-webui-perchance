@@ -11,7 +11,6 @@ from modules import images
 from modules.processing import Processed, process_images
 from modules.shared import opts, state
 
-
 perchance_proxy = "http://localhost:7864/generate?name="
 perchance_proxy_instance: CompletedProcess = None
 perchance_file_path = pathlib.Path('scripts\perchance_proxy')
@@ -68,7 +67,7 @@ def run_local_perchance_proxy():
         message = f"Node Running on pid {perchance_proxy_instance.pid}"
     else: 
         message = "Perchance Proxy already running"
-    print(message)
+    print(f"proxy returncode: {perchance_proxy_instance.poll()}")
     return message
 
 class Script(scripts.Script):
@@ -103,11 +102,12 @@ class Script(scripts.Script):
         return [generator_name, output, refresh_on_run, sequential, proxy_message]
 
     def run(self, p: StableDiffusionProcessing, generator_name, output, refresh_on_run, sequential, proxy_message: gr.Textbox):
+        global perchance_proxy_instance
         original_prompt: str = p.prompt[0] if type(p.prompt) == list else p.prompt
 
         try:
             stopped = perchance_proxy_instance.poll()
-            assert stopped==0
+            assert not stopped
         except:
             raise Exception("Perchance Proxy not running. Ensure node.js is installed and click 'Install Dependencies' then 'Start Proxy'")
             
