@@ -7,12 +7,16 @@ Unfortunately, perchance does not have a public API, so a local node.js API serv
 ## Installation
 1. Go to Extensions > Install from URL > https://github.com/ouoertheo/sd-webui-perchance
 2. Install [NodeJS](https://nodejs.org/en/download/package-manager/current)
-3. In Stable Diffusion WebUI, select the Perchance script, expand the Proxy section, click install dependencies
+3. The default port is `7864`. If you need this to be different, copy `.env.default` in place and rename it to `.env`. Edit the file and set the port `PERCHANCE_PROXY_PORT=your_port_number`
 
 ## Usage
 1. Open Stable Diffusion WebUI
 2. Select the Perchance script
-3. Expand Proxy > Start Proxy (do this any time SD is restarted)
-4. Put in the name of the desired generator into Generator Name.
-5. Click Refresh. The generator will now be stored locally and can be loaded in the future from the Cache section.
-6. Put in `{perchance}` into the prompt, and it will be replaced with the generated perchance output.
+3. Put in the name of the desired generator into Generator Name.
+4. Click Refresh. The generator will now be stored locally and can be loaded in the future from the Cache section.
+5. Put in `{perchance}` into the prompt, and it will be replaced with the generated perchance output.
+
+## Troubleshooting
+* Make sure you have NodeJS installed
+* Go to the Proxy section and click Start Proxy
+* Make sure nothing else is running on 7862 (this can be changed by going into perchance_proxy.js and settin `port` to the desired port)
