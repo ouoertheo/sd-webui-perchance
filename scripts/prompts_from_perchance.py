@@ -173,22 +173,23 @@ class Script(scripts.Script):
     ):
         global perchance_proxy_instance
         original_prompt: str = p.prompt[0] if type(p.prompt) == list else p.prompt
+        batch_count = p.n_iter
+        initial_seed = None
+        initial_info = None
+        all_images = []
 
-        # Randomize prompt if enabled. Currently disregards batch size.
-        # Intercepts batch_count and (p_iter) and
-        if refresh_on_run and not p.n_iter == 1:
-            all_images = []
-            batch_count = p.n_iter
+        if refresh_on_run:
+            # Always process one at a time when refresh is enabled
             p.n_iter = 1
             p.batch_size = 1
             state.job_count = batch_count
-            initial_seed = None
+
             for i in range(batch_count):
                 if state.interrupted:
                     break
                 p.do_not_save_grid = True
 
-                # Do the actual thing this script is supposed to do.
+                # Get fresh perchance output for each generation
                 p.prompt = original_prompt.replace(
                     "{perchance}", get_perchance(generator_name)[0]
                 )
@@ -228,9 +229,9 @@ class Script(scripts.Script):
                     all_images = [grid] + all_images
 
             processed = Processed(p, all_images, initial_seed, initial_info)
-
         else:
-            # Do the actual thing this script is supposed to do.
+            # Use cached output when refresh is disabled
             p.prompt = original_prompt.replace("{perchance}", output)
             processed = process_images(p)
+
         return processed
