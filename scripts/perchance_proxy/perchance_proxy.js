@@ -9,9 +9,12 @@ const express = require('express');
 const fetch = require("node-fetch");  // v2.6.1
 const fs = require("fs");
 const path = require("path");
-
+require('dotenv').config({
+    path: path.resolve(__dirname, '../../.env') // Two directories up
+});
+console.log(process.env.PERCHANCE_PROXY_PORT);
 const app = express();
-const port = "7864";
+const port = process.env.PERCHANCE_PROXY_PORT;
 
 // Custom error class for application-specific errors
 class PerchanceError extends Error {

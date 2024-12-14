@@ -11,100 +11,128 @@ from subprocess import CompletedProcess
 from modules import images
 from modules.processing import Processed, process_images
 from modules.shared import opts, state
+import os
+from pathlib import Path
+import subprocess
 
-perchance_proxy = "http://localhost:7864/generate?name="
-perchance_proxy_instance: CompletedProcess = None
-perchance_file_path = Path(__file__).parent / "perchance_proxy"
+import requests
+import gradio as gr
+
+from dotenv import load_dotenv
+
+load_dotenv()
+PERCHANCE_PROXY_PORT = int(os.getenv("PERCHANCE_PROXY_PORT", "7862"))
 
 
-def get_perchance(name):
-    result = requests.get(perchance_proxy + name).json()
-    try:
-        assert result["output"]
-        result["output"]
-        result["output"] = result["output"].replace("<BR>", "\n")
+class ProxyManager:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(ProxyManager, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
+    def __init__(self):
+        self.perchance_proxy = f"http://localhost:{PERCHANCE_PROXY_PORT}/generate?name="
+        self.perchance_proxy_instance: subprocess.CompletedProcess = None
+        self.perchance_file_path = Path(__file__).parent / "perchance_proxy"
+
+    def proxy_init(self):
+        if not self._initialized:
+            self.node_install()
+            self.run_local_perchance_proxy()
+            self._initialized = True
+
+    def get_perchance(self, name):
+        result = requests.get(self.perchance_proxy + name).json()
+        try:
+            assert result["output"]
+            result["output"]
+            result["output"] = result["output"].replace("<BR>", "\n")
+            return (
+                result["output"],
+                gr.Dropdown.update(choices=self.get_local_perchance_files()),
+            )
+        except Exception as e:
+            raise Exception(f"Failed to get output: {e}")
+
+    def get_local_perchance_files(self):
+        valid_files: list = []
+        perchance_validation_pattern = 'href="https://perchance.org/"'
+        html_files = [
+            f for f in os.listdir(self.perchance_file_path) if f.endswith(".html")
+        ]
+        for file in html_files:
+            file_path = os.path.join(self.perchance_file_path, file)
+            with open(file_path, "r", encoding="utf-8") as fh:
+                if perchance_validation_pattern in fh.read():
+                    valid_files.append(file.strip(".html"))
+        return valid_files
+
+    def update_local_perchance_file(self, name):
+        self.delete_local_perchance_file(name)
+        requests.get(self.perchance_proxy + name).content.decode("utf-8")
         return (
-            result["output"],
-            gr.Dropdown.update(choices=get_local_perchance_files()),
+            f"Updated {name}",
+            gr.Dropdown.update(choices=self.get_local_perchance_files()),
         )
-    except Exception as e:
-        raise Exception(f"Failed to get output: {e}")
 
+    def delete_local_perchance_file(self, name):
+        message = ""
+        file_path = os.path.join(self.perchance_file_path, name + ".html")
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            message = f"Removed {file_path}"
+        else:
+            message = f"Could not find {file_path}"
+        return (message, gr.Dropdown.update(choices=self.get_local_perchance_files()))
 
-def get_local_perchance_files():
-    global perchance_file_path
-    valid_files: list = []
-    perchance_validation_pattern = 'base href="https://perchance.org/"'
-    html_files = [f for f in os.listdir(perchance_file_path) if f.endswith(".html")]
-    for file in html_files:
-        file_path = os.path.join(perchance_file_path, file)
-        with open(file_path, "r", encoding="utf-8") as fh:
-            if perchance_validation_pattern in fh.read():
-                valid_files.append(file.strip(".html"))
-    return valid_files
+    def delete_local_perchance_files(self):
+        html_files = [
+            f for f in os.listdir(self.perchance_file_path) if f.endswith(".html")
+        ]
+        for file in html_files:
+            file_path = os.path.join(self.perchance_file_path, file)
+            os.remove(file_path)
+        return (
+            "Local Perchance cache was cleared",
+            gr.Dropdown.update(choices=self.get_local_perchance_files()),
+        )
 
+    def node_install(self):
+        # Not working yet
+        print("Checking Node version")
+        node = subprocess.run(["node", "-v"], shell=True, cwd=self.perchance_file_path)
+        if node.returncode == 1:
+            return "Node.js/NPM required"
+        print("Installing Node package dependencies")
+        npm = subprocess.run(
+            ["npm", "install"], shell=True, cwd=self.perchance_file_path
+        )
+        if npm.returncode == 1:
+            return "Install failed."
+        self.run_local_perchance_proxy()
 
-def update_local_perchance_file(name):
-    delete_local_perchance_file(name)
-    requests.get(perchance_proxy + name).content.decode("utf-8")
-    return (f"Updated {name}", gr.Dropdown.update(choices=get_local_perchance_files()))
-
-
-def delete_local_perchance_file(name):
-    global perchance_file_path
-    message = ""
-    file_path = os.path.join(perchance_file_path, name + ".html")
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        message = f"Removed {file_path}"
-    else:
-        message = f"Could not find {file_path}"
-    return (message, gr.Dropdown.update(choices=get_local_perchance_files()))
-
-
-def delete_local_perchance_files():
-    global perchance_file_path
-    html_files = [f for f in os.listdir(perchance_file_path) if f.endswith(".html")]
-    for file in html_files:
-        file_path = os.path.join(perchance_file_path, file)
-        os.remove(file_path)
-    return (
-        "Local Perchance cache was cleared",
-        gr.Dropdown.update(choices=get_local_perchance_files()),
-    )
-
-
-def node_install():
-    # Not working yet
-    print("Checking Node version")
-    global perchance_file_path
-    node = subprocess.run(["node", "-v"], shell=True, cwd=perchance_file_path)
-    if node.returncode == 1:
-        return "Node.js/NPM required"
-    print("Installing Node package dependencies")
-    npm = subprocess.run(["npm", "install"], shell=True, cwd=perchance_file_path)
-    if npm.returncode == 1:
-        return "Install failed."
-
-
-def run_local_perchance_proxy():
-    global perchance_proxy_instance, perchance_file_path
-    """Run local Node.js proxy"""
-    proxy_js = perchance_file_path.joinpath("perchance_proxy.js")
-    print(f"proxy location: {proxy_js}")
-    message = ""
-    # Check if running,
-    try:
-        stopped = perchance_proxy_instance.poll()
-    except:
-        stopped = 1
-    if stopped:
-        perchance_proxy_instance = subprocess.Popen(f"node {proxy_js}", shell=True)
-        message = f"Node Running on pid {perchance_proxy_instance.pid}"
-    else:
-        message = "Perchance Proxy already running"
-    print(f"proxy returncode: {perchance_proxy_instance.poll()}")
-    return message
+    def run_local_perchance_proxy(self):
+        """Run local Node.js proxy"""
+        proxy_js = self.perchance_file_path.joinpath("perchance_proxy.js")
+        print(f"proxy location: {proxy_js}")
+        message = ""
+        # Check if running,
+        try:
+            stopped = self.perchance_proxy_instance.poll()
+        except:
+            stopped = 1
+        if stopped:
+            self.perchance_proxy_instance = subprocess.Popen(
+                f"node {proxy_js}", shell=True
+            )
+            message = f"Node Running on pid {self.perchance_proxy_instance.pid}"
+        else:
+            message = "Perchance Proxy already running"
+        print(f"proxy returncode: {self.perchance_proxy_instance.poll()}")
+        return message
 
 
 def load_from_cache(selected_name):
@@ -112,6 +140,11 @@ def load_from_cache(selected_name):
 
 
 class Script(scripts.Script):
+    def __init__(self, *args, **kwargs):
+        self.proxy = ProxyManager()
+        self.proxy.proxy_init()
+        super().__init__(*args, **kwargs)
+
     def title(self):
         return "Perchance"
 
@@ -127,7 +160,9 @@ class Script(scripts.Script):
         with gr.Accordion("Cache", open=True) as cache:
             with gr.Row():
                 cache_dropdown = gr.Dropdown(
-                    get_local_perchance_files(), label="Prompt History", type="value"
+                    self.proxy.get_local_perchance_files(),
+                    label="Prompt History",
+                    type="value",
                 )
             with gr.Row():
                 cache_load = gr.Button("Load")
@@ -144,20 +179,24 @@ class Script(scripts.Script):
             load_from_cache, inputs=[cache_dropdown], outputs=[generator_name]
         )
         cache_update.click(
-            update_local_perchance_file,
+            self.proxy.update_local_perchance_file,
             inputs=cache_dropdown,
             outputs=[status, cache_dropdown],
         )
         cache_delete.click(
-            delete_local_perchance_file,
+            self.proxy.delete_local_perchance_file,
             inputs=cache_dropdown,
             outputs=[status, cache_dropdown],
         )
         refresh.click(
-            get_perchance, inputs=[generator_name], outputs=[output, cache_dropdown]
+            self.proxy.get_perchance,
+            inputs=[generator_name],
+            outputs=[output, cache_dropdown],
         )
-        proxy_start.click(run_local_perchance_proxy, inputs=[], outputs=[status])
-        install_deps.click(node_install, inputs=[], outputs=[status])
+        proxy_start.click(
+            self.proxy.run_local_perchance_proxy, inputs=[], outputs=[status]
+        )
+        install_deps.click(self.proxy.node_install, inputs=[], outputs=[status])
 
         # TODO install_node
         return [generator_name, output, refresh_on_run, sequential, status]
@@ -171,7 +210,6 @@ class Script(scripts.Script):
         sequential,
         proxy_message: gr.Textbox,
     ):
-        global perchance_proxy_instance
         original_prompt: str = p.prompt[0] if type(p.prompt) == list else p.prompt
         batch_count = p.n_iter
         initial_seed = None
@@ -191,7 +229,7 @@ class Script(scripts.Script):
 
                 # Get fresh perchance output for each generation
                 p.prompt = original_prompt.replace(
-                    "{perchance}", get_perchance(generator_name)[0]
+                    "{perchance}", self.proxy.get_perchance(generator_name)[0]
                 )
                 state.job = f"Batch {i + 1}/{batch_count}"
                 processed = process_images(p)
